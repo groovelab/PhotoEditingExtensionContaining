@@ -1,0 +1,41 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>IDESourceControlProjectFavoriteDictionaryKey</key>
+	<false/>
+	<key>IDESourceControlProjectIdentifier</key>
+	<string>46AE2606-FAED-4F8C-9D70-0E2F8D84B53C</string>
+	<key>IDESourceControlProjectName</key>
+	<string>PhotoEditingExtensionContaining</string>
+	<key>IDESourceControlProjectOriginsDictionary</key>
+	<dict>
+		<key>48270134F7F40C71C68BE68142EDDE87C6DDA5CB</key>
+		<string>https://github.com/groovelab/PhotoEditingExtensionContaining.git</string>
+	</dict>
+	<key>IDESourceControlProjectPath</key>
+	<string>PhotoEditingExtensionContaining.xcodeproj</string>
+	<key>IDESourceControlProjectRelativeInstallPathDictionary</key>
+	<dict>
+		<key>48270134F7F40C71C68BE68142EDDE87C6DDA5CB</key>
+		<string>../..</string>
+	</dict>
+	<key>IDESourceControlProjectURL</key>
+	<string>https://github.com/groovelab/PhotoEditingExtensionContaining.git</string>
+	<key>IDESourceControlProjectVersion</key>
+	<integer>111</integer>
+	<key>IDESourceControlProjectWCCIdentifier</key>
+	<string>48270134F7F40C71C68BE68142EDDE87C6DDA5CB</string>
+	<key>IDESourceControlProjectWCConfigurations</key>
+	<array>
+		<dict>
+			<key>IDESourceControlRepositoryExtensionIdentifierKey</key>
+			<string>public.vcs.git</string>
+			<key>IDESourceControlWCCIdentifierKey</key>
+			<string>48270134F7F40C71C68BE68142EDDE87C6DDA5CB</string>
+			<key>IDESourceControlWCCName</key>
+			<string>PhotoEditingExtensionContaining</string>
+		</dict>
+	</array>
+</dict>
+</plist>
