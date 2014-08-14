@@ -14,9 +14,9 @@
 @interface PhotoEditingViewController () <PHContentEditingController>
 @property (strong) PHContentEditingInput *input;
 
-@property (nonatomic, strong) UIImage *inputImage;
 @property (nonatomic) CGRect imageFrame;
-@property (nonatomic, strong) NSMutableArray *touchedPoints;
+@property (strong, nonatomic) NSMutableArray *touchedPoints;
+@property (strong, nonatomic) UIImage *stamp;
 
 @property (weak, nonatomic) IBOutlet UIImageView *editedImageView;
 
@@ -24,19 +24,21 @@
 
 @implementation PhotoEditingViewController
 
-@synthesize editedImageView;
-@synthesize inputImage;
 @synthesize input;
 @synthesize imageFrame;
 @synthesize touchedPoints;
+@synthesize stamp;
+@synthesize editedImageView;
 
 - (void)viewDidLoad {
     [super viewDidLoad];
     // Do any additional setup after loading the view.
     self.editedImageView.userInteractionEnabled = YES;
-    [self.editedImageView addGestureRecognizer:[[UITapGestureRecognizer alloc] initWithTarget:self action:@selector(touchAction:)]];
+    [self.editedImageView addGestureRecognizer:[[UITapGestureRecognizer alloc] initWithTarget:self
+                                                                                       action:@selector(touchAction:)]];
     
     self.touchedPoints = [NSMutableArray array];
+    self.stamp = [UIImage imageNamed:@"stamp.gif"];
 }
 
 - (void)didReceiveMemoryWarning {
@@ -50,8 +52,10 @@
     // Inspect the adjustmentData to determine whether your extension can work with past edits.
     // (Typically, you use its formatIdentifier and formatVersion properties to do this.)
 //    return NO;
-    BOOL result = [adjustmentData.formatIdentifier isEqualToString:@"asia.groovelab.PhotoEditingExtensionContaining.Stamp"];
-    result &= [adjustmentData.formatVersion isEqualToString:@"1.0"];
+    NSBundle *bundle = [NSBundle mainBundle];
+    NSDictionary *dic = [bundle infoDictionary];
+    BOOL result = [adjustmentData.formatIdentifier isEqualToString:[bundle bundleIdentifier]];
+    result &= [adjustmentData.formatVersion isEqualToString:[dic valueForKey:@"CFBundleShortVersionString"]];
     return result;
 }
 
@@ -60,17 +64,14 @@
     // If you returned YES from canHandleAdjustmentData:, contentEditingInput has the original image and adjustment data.
     // If you returned NO, the contentEditingInput has past edits "baked in".
     self.input = contentEditingInput;
+    self.editedImageView.image = self.input.displaySizeImage;
     
-    self.inputImage = self.input.displaySizeImage;
-    self.editedImageView.image = self.inputImage;
-    
-    CGRect frame = AVMakeRectWithAspectRatioInsideRect(self.input.displaySizeImage.size, self.editedImageView.bounds);
+    CGRect frame = AVMakeRectWithAspectRatioInsideRect(self.editedImageView.image.size, self.editedImageView.bounds);
     CGRect imageViewFrame = self.editedImageView.frame;
     self.imageFrame = CGRectMake( (imageViewFrame.size.width - frame.size.width) / 2.0,
-                                 (imageViewFrame.size.height - frame.size.height) / 2.0,
-                                 frame.size.width,
-                                 frame.size.height );
-    
+                                  (imageViewFrame.size.height - frame.size.height) / 2.0,
+                                  frame.size.width,
+                                  frame.size.height );
     NSLog( @"%f %f", self.imageFrame.origin.x, self.imageFrame.origin.y );
     
     // Load adjustment data, if any
@@ -80,16 +81,9 @@
             self.touchedPoints = [NSKeyedUnarchiver unarchiveObjectWithData:adjustmentData.data];
             
             CGFloat scale = self.input.displaySizeImage.size.height / self.imageFrame.size.height;
-            NSMutableArray *positions = [NSMutableArray array];
-            for ( NSValue *val in self.touchedPoints ) {
-                CGPoint pointInImage;
-                [val getValue:&pointInImage];
-                pointInImage = CGPointMake( pointInImage.x * scale,
-                                           pointInImage.y * scale );
-                [positions addObject:[NSValue valueWithBytes:&pointInImage objCType:@encode(CGPoint)]];
-            }
+            NSArray *positions = [self scalePositions:self.touchedPoints scale:scale];
             UIImage *image = [self compositeImages:self.editedImageView.image
-                                          addImage:[UIImage imageNamed:@"stamp.gif"]
+                                          addImage:self.stamp
                                        addPosition:positions];
             self.editedImageView.image = image;
         }
@@ -108,51 +102,32 @@
         PHContentEditingOutput *output = [[PHContentEditingOutput alloc] initWithContentEditingInput:self.input];
         
         // Adjustment data
+        NSBundle *bundle = [NSBundle mainBundle];
+        NSDictionary *dic = [bundle infoDictionary];
         NSData *archivedData = [NSKeyedArchiver archivedDataWithRootObject:self.touchedPoints];
         PHAdjustmentData *adjustmentData = [[PHAdjustmentData alloc]
-                                            initWithFormatIdentifier:@"asia.groovelab.PhotoEditingExtensionContaining.Stamp"
-                                            formatVersion:@"1.0"
+                                            initWithFormatIdentifier:[bundle bundleIdentifier]
+                                            formatVersion:[dic valueForKey:@"CFBundleShortVersionString"]
                                             data:archivedData];
         output.adjustmentData = adjustmentData;
-        
         
         // Get full size image
         NSURL *url = self.input.fullSizeImageURL;
         UIImage *image = [UIImage imageWithContentsOfFile:url.path];
         
-        // 重ねる画像
-        UIImage *originalAddImage = [UIImage imageNamed:@"stamp.gif"];
-        
-        // 取得した画像の縦サイズ、横サイズを取得する
-        int imageW = originalAddImage.size.width;
-        int imageH = originalAddImage.size.height;
-        
-        // リサイズする倍率を作成する。
+        //  resize stamp
         CGFloat scale = image.size.height / self.input.displaySizeImage.size.height;
+        UIImage* resizedAddImage = [self resizeImage:self.stamp scale:scale];
         
-        CGSize resizedSize = CGSizeMake(imageW * scale, imageH * scale);
-        UIGraphicsBeginImageContext(resizedSize);
-        [originalAddImage drawInRect:CGRectMake(0, 0, resizedSize.width, resizedSize.height)];
-        UIImage* resizedAddImage = UIGraphicsGetImageFromCurrentImageContext();
-        UIGraphicsEndImageContext();
-        
+        //  render full size image
         scale = image.size.height / self.imageFrame.size.height;
-        
-        NSMutableArray *positions = [NSMutableArray array];
-        for ( NSValue *val in self.touchedPoints ) {
-            CGPoint point;
-            [val getValue:&point];
-            CGPoint pointInImage = CGPointMake( point.x * scale,
-                                               point.y * scale );
-            [positions addObject:[NSValue valueWithBytes:&pointInImage objCType:@encode(CGPoint)]];
-        }
+        NSArray *positions = [self scalePositions:self.touchedPoints scale:scale];
         UIImage *transformedImage = [self compositeImages:image
                                                  addImage:resizedAddImage
                                               addPosition:positions];
-        NSData *renderedJPEGData = UIImageJPEGRepresentation(transformedImage, 0.9f);
+        NSData *renderedJPEGData = UIImageJPEGRepresentation(transformedImage, 1.0f);
         
         // Save JPEG data
-        NSLog(@"%@", output.renderedContentURL);
         NSError *error = nil;
         BOOL success = [renderedJPEGData writeToURL:output.renderedContentURL options:NSDataWritingAtomic error:&error];
         if (success) {
@@ -170,9 +145,66 @@
     });
 }
 
+- (UIImage*)resizeImage:(UIImage*)originalImage scale:(CGFloat)scale {
+    CGSize resizedSize = CGSizeMake(originalImage.size.width * scale, originalImage.size.height * scale);
 
-- (UIImage *)compositeImages:(UIImage*)baseImage addImage:(UIImage*)addImage addPosition:(NSArray*)addPositions
-{
+    UIGraphicsBeginImageContext(resizedSize);
+    [originalImage drawInRect:CGRectMake(0, 0, resizedSize.width, resizedSize.height)];
+    UIImage* resizedImage = UIGraphicsGetImageFromCurrentImageContext();
+    UIGraphicsEndImageContext();
+
+    return resizedImage;
+}
+
+- (BOOL)shouldShowCancelConfirmation {
+    // Returns whether a confirmation to discard changes should be shown to the user on cancel.
+    // (Typically, you should return YES if there are any unsaved changes.)
+    return NO;
+}
+
+- (void)cancelContentEditing {
+    // Clean up temporary files, etc.
+    // May be called after finishContentEditingWithCompletionHandler: while you prepare output.
+}
+
+#pragma mark Action Methods
+- (void)touchAction:(UITapGestureRecognizer*)sender {
+    
+    CGPoint touchedPoint = [sender locationInView:self.editedImageView];
+    if ( !CGRectContainsPoint(self.imageFrame, touchedPoint) ) {
+        return;
+    }
+    
+    touchedPoint = CGPointMake( touchedPoint.x - self.imageFrame.origin.x,
+                                touchedPoint.y - self.imageFrame.origin.y );
+    NSLog(@"touched %f %f", touchedPoint.x, touchedPoint.y);
+    
+    NSValue *val = [NSValue valueWithBytes:&touchedPoint objCType:@encode(CGPoint)];
+    [self.touchedPoints addObject:val];
+    
+    CGFloat scale = self.input.displaySizeImage.size.height / self.imageFrame.size.height;
+    NSArray *positions = [self scalePositions:@[val] scale:scale];
+    UIImage *image = [self compositeImages:self.editedImageView.image
+                                  addImage:self.stamp
+                               addPosition:positions];
+    self.editedImageView.image = image;
+}
+
+#pragma mark Private Methods
+- (NSArray*)scalePositions:(NSArray*)originalPositions scale:(CGFloat)scale {
+    NSMutableArray *positions = [NSMutableArray array];
+    
+    for ( NSValue *value in originalPositions ) {
+        CGPoint oroginalPosition;
+        [value getValue:&oroginalPosition];
+        CGPoint position = CGPointMake( oroginalPosition.x * scale, oroginalPosition.y * scale );
+        [positions addObject:[NSValue valueWithBytes:&position objCType:@encode(CGPoint)]];
+    }
+
+    return positions;
+}
+
+- (UIImage *)compositeImages:(UIImage*)baseImage addImage:(UIImage*)addImage addPosition:(NSArray*)addPositions {
     UIImage *image = nil;
     
     UIGraphicsBeginImageContext(CGSizeMake(baseImage.size.width, baseImage.size.height));
@@ -192,42 +224,4 @@
     
     return image;
 }
-
-- (BOOL)shouldShowCancelConfirmation {
-    // Returns whether a confirmation to discard changes should be shown to the user on cancel.
-    // (Typically, you should return YES if there are any unsaved changes.)
-    return NO;
-}
-
-- (void)cancelContentEditing {
-    // Clean up temporary files, etc.
-    // May be called after finishContentEditingWithCompletionHandler: while you prepare output.
-}
-
-#pragma mark Action Methods
-- (void)touchAction: (UITapGestureRecognizer *)sender{
-    
-    CGPoint touchedPoint = [sender locationInView:self.editedImageView];
-    if ( !CGRectContainsPoint(self.imageFrame, touchedPoint) ) {
-        return;
-    }
-    NSLog(@"touched %f %f", touchedPoint.x, touchedPoint.y);
-    
-    touchedPoint = CGPointMake( touchedPoint.x - self.imageFrame.origin.x,
-                               touchedPoint.y - self.imageFrame.origin.y );
-    
-    NSValue *val = [NSValue valueWithBytes:&touchedPoint objCType:@encode(CGPoint)];
-    [self.touchedPoints addObject:val];
-    
-    CGFloat scale = self.input.displaySizeImage.size.height / self.imageFrame.size.height;
-    CGPoint pointInImage = CGPointMake( touchedPoint.x * scale,
-                                       touchedPoint.y * scale );
-    
-    NSArray *positions = @[[NSValue valueWithBytes:&pointInImage objCType:@encode(CGPoint)]];
-    UIImage *image = [self compositeImages:self.editedImageView.image
-                                  addImage:[UIImage imageNamed:@"stamp.gif"]
-                               addPosition:positions];
-    self.editedImageView.image = image;
-}
-
 @end

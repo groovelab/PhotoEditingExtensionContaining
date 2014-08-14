@@ -6,3 +6,9 @@
 #
 # Pods/
 .DS_Store
+*xcuserdata
+*.xcworkspacedata
+*Thumbs.db
+Pods
+*.xcuserstate
+*.xccheckout
